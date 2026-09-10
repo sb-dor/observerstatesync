@@ -19,7 +19,9 @@ class InternetConnectionController with ChangeNotifier {
   }
 
   final Duration checkInterval;
-  final _observers = <InternetConnectionObserver>[];
+
+  // Store observers in a Set, preventing duplicates. Unlike list of observers
+  final _observers = <InternetConnectionObserver>{};
 
   Timer? _timer;
   bool _checkInProgress = false;

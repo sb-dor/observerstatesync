@@ -5,7 +5,8 @@ mixin AppSettingsObserver {
 }
 
 class AppSettingsController with ChangeNotifier {
-  final _observers = <AppSettingsObserver>[];
+  // Store observers in a Set, preventing duplicates. Unlike list of observers
+  final _observers = <AppSettingsObserver>{};
 
   bool _notifications = false;
 
