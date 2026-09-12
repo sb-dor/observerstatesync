@@ -5,6 +5,12 @@ import 'package:flutter/foundation.dart';
 
 enum InternetStatus { checking, online, offline }
 
+/// Signature of the DNS lookup used to probe connectivity; injectable for
+/// tests so no real network access (or pending timers) is required.
+typedef InternetAddressLookup = Future<List<InternetAddress>> Function(
+  String host,
+);
+
 mixin InternetConnectionObserver {
   void onInternetConnectionChange(InternetStatus status) {}
 }
@@ -12,13 +18,19 @@ mixin InternetConnectionObserver {
 class InternetConnectionController with ChangeNotifier {
   InternetConnectionController({
     this.checkInterval = const Duration(seconds: 5),
-  }) {
+    this.lookupTimeout = const Duration(seconds: 3),
+    InternetAddressLookup? lookup,
+  }) : _lookup = lookup ?? InternetAddress.lookup {
     checkInternet();
 
     _timer = Timer.periodic(checkInterval, (_) => checkInternet());
   }
 
   final Duration checkInterval;
+
+  final Duration lookupTimeout;
+
+  final InternetAddressLookup _lookup;
 
   // Store observers in a Set, preventing duplicates. Unlike list of observers
   final _observers = <InternetConnectionObserver>{};
@@ -46,8 +58,8 @@ class InternetConnectionController with ChangeNotifier {
     InternetStatus newStatus;
 
     try {
-      final addresses = await InternetAddress.lookup('example.com')
-          .timeout(const Duration(seconds: 3));
+      final addresses = await _lookup('example.com')
+          .timeout(lookupTimeout);
 
       newStatus = addresses.isNotEmpty
           ? InternetStatus.online

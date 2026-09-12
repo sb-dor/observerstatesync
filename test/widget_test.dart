@@ -5,26 +5,53 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:observerstatesynch/app_lifecycle/app_lifecycle_controller.dart';
 
-import 'package:observerstatesynch/main.dart';
+class _RecordingObserver with AppLifecycleObserver {
+  final statuses = <AppLifecycleStatus>[];
+
+  @override
+  void onAppLifecycleChange(AppLifecycleStatus status) => statuses.add(status);
+}
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    // await tester.pumpWidget(const MyApp());
+  testWidgets(
+    'AppLifecycleController notifies observers on lifecycle changes',
+    (tester) async {
+      final controller = AppLifecycleController();
+      addTearDown(controller.dispose);
+      final observer = _RecordingObserver();
+      controller.addObserver(observer);
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+      // Emulate the app going to background: resumed -> inactive -> hidden
+      // -> paused (the sequence the engine sends).
+      tester.binding.handleAppLifecycleStateChanged(
+        AppLifecycleState.inactive,
+      );
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+      expect(
+        observer.statuses,
+        [
+          AppLifecycleStatus.inactive,
+          AppLifecycleStatus.hidden,
+          AppLifecycleStatus.paused,
+        ],
+      );
+      expect(controller.status, AppLifecycleStatus.paused);
+      expect(controller.isResumed, isFalse);
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
-  });
+      // No duplicate notifications for the same state.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      expect(observer.statuses.length, 3);
+
+      // Removing the observer stops the notifications.
+      controller.removeObserver(observer);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.detached);
+      expect(observer.statuses.length, 3);
+    },
+  );
 }
